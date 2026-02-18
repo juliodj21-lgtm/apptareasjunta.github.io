@@ -422,12 +422,19 @@
     </div>
 
     <script>
+        // --- CONFIGURACIÓN PÚBLICA (PARA GITHUB PAGES) ---
+        // IMPORTANTE: Pega aquí tu URL de Google Apps Script (la que termina en /exec) dentro de las comillas.
+        // Ejemplo: const PUBLIC_API_URL = "https://script.google.com/macros/s/AKfycb.../exec";
+        const PUBLIC_API_URL = "https://script.google.com/macros/s/AKfycbxb62P_JpfUSri098-hgoP9RiexbIOE-ChDAzBZaoyQNUnNNnK6pzWqKklBvzd_X_1KNA/exec"; 
+
         // Datos por defecto
         let tasks = [
             { id: 1, date: "2026-01-29", task: "Fortalecer el aprendizaje institucional mediante el intercambio de experiencias con otras Cámaras de Comercio.", requester: "Alexander Sanchez", responsible: "Ivan Florez", monitoring: "2026-02-04", status: "pendiente", detail: "Inicio de gestión", fb_link: "", image_url: "" }
         ];
 
-        let API_URL = localStorage.getItem('google_sheet_api_url') || "";
+        // Usamos la URL pública si existe, sino buscamos en localStorage (Modo Local)
+        let API_URL = PUBLIC_API_URL || localStorage.getItem('google_sheet_api_url') || "";
+        
         let editingTaskId = null;
         let chartInstance = null; // Instancia de la gráfica
 
@@ -531,13 +538,21 @@
         async function fetchTasksFromAPI() {
             if (!API_URL) return;
             if (!API_URL.includes('/exec')) {
-                alert("Error: URL inválida. Usa la que termina en /exec.");
-                updateConnectionStatus(true, "URL Inválida", "bg-red-500");
+                // Solo alertar si estamos en modo local manual
+                if (!PUBLIC_API_URL) {
+                     alert("Error: URL inválida. Usa la que termina en /exec.");
+                     updateConnectionStatus(true, "URL Inválida", "bg-red-500");
+                }
                 return;
             }
             
             showLoading(true, "Sincronizando...");
-            updateConnectionStatus(true, "Sincronizando...");
+            // Si es pública, mostramos un estado diferente
+            if(PUBLIC_API_URL) {
+                updateConnectionStatus(true, "Conectado (Público)", "bg-green-500");
+            } else {
+                updateConnectionStatus(true, "Sincronizando...", "bg-slate-400");
+            }
             
             try {
                 const response = await fetch(API_URL);
@@ -607,6 +622,11 @@
         }
 
         function openConfigModal() {
+            // Si hay URL pública, avisamos que no es necesario configurar
+            if(PUBLIC_API_URL) {
+                alert("El tablero está configurado en modo PÚBLICO. No es necesario conectar manualmente.");
+                return;
+            }
             document.getElementById('apiUrlInput').value = API_URL;
             document.getElementById('configModal').classList.remove('hidden');
         }
@@ -624,6 +644,7 @@
         }
 
         function disconnectAPI() {
+            if(PUBLIC_API_URL) return; // No permitir desconectar si es hardcoded
             API_URL = "";
             localStorage.removeItem('google_sheet_api_url');
             updateConnectionStatus(true, "Modo Local", "bg-slate-400");
@@ -966,6 +987,22 @@
                 startY: 32,
                 head: [['Fecha', 'Tarea', 'Solicitante', 'Responsable', 'Estado']],
                 body: tableData,
+                // --- AJUSTE DE COLORES EN PDF ---
+                didParseCell: function(data) {
+                    if (data.section === 'body' && data.column.index === 4) { // La columna 4 es "Estado"
+                        const text = data.cell.text[0].toLowerCase();
+                        if (text.includes('cumplida')) {
+                            data.cell.styles.textColor = [22, 163, 74]; // Verde
+                            data.cell.styles.fontStyle = 'bold';
+                        } else if (text.includes('pendiente')) {
+                            data.cell.styles.textColor = [220, 38, 38]; // Rojo
+                            data.cell.styles.fontStyle = 'bold';
+                        } else if (text.includes('proceso')) {
+                            data.cell.styles.textColor = [217, 119, 6]; // Ámbar/Naranja
+                            data.cell.styles.fontStyle = 'bold';
+                        }
+                    }
+                }
             });
             doc.save(`reporte_${new Date().toISOString().slice(0,10)}.pdf`);
         }
